@@ -32,10 +32,6 @@ VERSION:
 DESCRIPTION:
 Try the best to extract SCS file, especially useful for some odd SCS missing roots
 
-
-AUTHOR:
-Chao Yang <chao@yang.so>
-
 COMMANDS:
 help, h  Shows a list of commands or help for one command
 

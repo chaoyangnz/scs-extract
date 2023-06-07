@@ -39,7 +39,7 @@ func main() {
 		if dump {
 			scs.Dump(filepath.Join(destPath, "dump"))
 		}
-		scs.TryExtract(filepath.Join(destPath, "src"))
+		scs.TryExtract(filepath.Join(destPath, "extracted"))
 
 		return nil
 	}

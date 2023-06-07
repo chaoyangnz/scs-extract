@@ -328,15 +328,11 @@ func (this *SCS) match(r *regexp.Regexp, group int, icon bool) []string {
 	return keys
 }
 
+var extracted = map[uint64]bool{}
+
 func (this *SCS) TryExtract(base string) {
 	// well-known roots
-	paths := []string{
-		"ui",
-		"def",
-		"vehicle",
-		"material",
-		"automat",
-	}
+	paths := wellKnownPaths
 
 	// pmg, pmd...
 	r := regexp.MustCompile("\"/([^\"]+)\"")
@@ -346,6 +342,8 @@ func (this *SCS) TryExtract(base string) {
 	r = regexp.MustCompile("icon: \"([^\"]+)\"")
 	paths = append(paths, this.match(r, 1, true)...)
 
+	extracted = map[uint64]bool{}
+
 	for _, path := range paths {
 		tree := this.ReadTree(path)
 
@@ -353,6 +351,8 @@ func (this *SCS) TryExtract(base string) {
 			tree.Save(base)
 		}
 	}
+
+	fmt.Printf("%d mounted, %d extracted", this.header.entriesCount, len(extracted))
 }
 
 func (this *SCS) init() {
@@ -395,8 +395,13 @@ func (this HashfsFile) Hash() uint64 {
 }
 
 func (this HashfsFile) Save(base string) {
+
+	if _, ok := extracted[this.hash]; !ok {
+		fmt.Printf("📜 %s \n", this.path)
+		extracted[this.hash] = true
+	}
+
 	path := base + "/" + this.path
-	fmt.Printf("📜 %s \n", path)
 	os.MkdirAll(filepath.Dir(path), os.ModeDir)
 	os.WriteFile(path, this.data, 0644)
 }
@@ -406,7 +411,11 @@ func (this HashfsDir) Hash() uint64 {
 }
 
 func (this HashfsDir) Save(base string) {
-	fmt.Printf("📁 %s \n", base+"/"+this.path)
+	if _, ok := extracted[this.hash]; !ok {
+		fmt.Printf("📁 %s \n", this.path)
+		extracted[this.hash] = true
+	}
+
 	os.MkdirAll(base+"/"+this.path, os.ModeDir)
 	for _, child := range this.children {
 		if dir, ok := child.(HashfsDir); ok {
