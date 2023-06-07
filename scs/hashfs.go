@@ -1,12 +1,9 @@
 package scs
 
 import (
-	"bytes"
-	"compress/zlib"
-	"encoding/binary"
 	"fmt"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-faster/city"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -84,102 +81,6 @@ func NewEntry(buffer *Buffer) HashfsEntry {
 	return entry
 }
 
-type Buffer struct {
-	bytes    []uint8
-	readable []uint8
-}
-
-func NewBuffer(bytes []uint8) *Buffer {
-	return &Buffer{
-		bytes:    bytes,
-		readable: bytes,
-	}
-}
-
-func (this *Buffer) next8() uint64 {
-	value := binary.LittleEndian.Uint64(this.readable[:8])
-	this.readable = this.readable[8:]
-	return value
-}
-
-func (this *Buffer) next4() uint32 {
-	value := binary.LittleEndian.Uint32(this.readable[:4])
-	this.readable = this.readable[4:]
-	return value
-}
-
-func (this *Buffer) next2() uint16 {
-	value := binary.LittleEndian.Uint16(this.readable[:2])
-	this.readable = this.readable[2:]
-	return value
-}
-
-func (this *Buffer) next() uint8 {
-	return this.nextN(1)[0]
-}
-
-func (this *Buffer) nextN(length uint32) []uint8 {
-	bytes := this.readable[:length]
-	this.readable = this.readable[length:]
-	return bytes
-}
-
-func (this *Buffer) nextString(length uint32) string {
-	bytes := this.nextN(length)
-	return string(bytes)
-}
-
-func (this *Buffer) nextBuffer(length uint32) *Buffer {
-	bytes := this.readable[:length]
-	this.readable = this.readable[length:]
-	return NewBuffer(bytes)
-}
-
-func (this *Buffer) buffer(offset uint64, size uint32) *Buffer {
-	bytes := this.bytes[offset : offset+uint64(size)]
-	return NewBuffer(bytes)
-}
-
-func (this *Buffer) nextLine() (string, bool) {
-	for i := uint32(0); i < this.length(); i++ {
-		if this.readable[i] == '\n' {
-			str := this.nextString(i)
-			this.next()
-			return str, this.length() > 0
-		}
-	}
-	return string(this.readable), false
-}
-
-func (this *Buffer) deflate() *Buffer {
-	z, err := zlib.NewReader(bytes.NewReader(this.bytes))
-	if err != nil {
-		return &Buffer{}
-	}
-	b, err := ioutil.ReadAll(z)
-	if err != nil {
-		return &Buffer{}
-	}
-	return NewBuffer(b)
-}
-
-func (this *Buffer) textual() bool {
-	for i := uint32(0); i < this.length(); i++ {
-		if this.bytes[i] > 127 {
-			return false
-		}
-	}
-	return true
-}
-
-func (this *Buffer) length() uint32 {
-	return uint32(len(this.readable))
-}
-
-func (this *Buffer) size() uint64 {
-	return uint64(len(this.bytes))
-}
-
 func NewSCS(path string) *SCS {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
@@ -194,7 +95,7 @@ func NewSCS(path string) *SCS {
 }
 
 func (this *SCS) ReadTree(path string) HashfsNode {
-	if entry, ok := this.getEntryByPath(path); ok {
+	if entry, ok := this.GetEntryByPath(path); ok {
 		if entry.flags.dir {
 			dir := this.readDir(entry)
 			dir.name = filepath.Base(path)
@@ -207,7 +108,7 @@ func (this *SCS) ReadTree(path string) HashfsNode {
 					child.path = p
 					dir.children[i] = child
 				} else {
-					if e, o := this.getEntryByPath(path + "/" + name); o {
+					if e, o := this.GetEntryByPath(path + "/" + name); o {
 						child := this.readFile(e)
 						child.name = name
 						child.path = path + "/" + name
@@ -229,7 +130,7 @@ func (this *SCS) ReadTree(path string) HashfsNode {
 	return nil
 }
 
-func (this *SCS) getEntryByPath(path string) (HashfsEntry, bool) {
+func (this *SCS) GetEntryByPath(path string) (HashfsEntry, bool) {
 	entry, ok := this.entryMap[hashed(path)]
 
 	return entry, ok
@@ -297,22 +198,51 @@ func (this *SCS) Dump(base string) {
 
 // match text in SII files
 func (this *SCS) match(r *regexp.Regexp, group int, icon bool) []string {
-	set := make(map[string]bool)
+	set := mapset.NewSet[string]()
 
 	for _, entry := range this.entries {
 		if !entry.flags.dir {
 			f := this.readFile(entry)
 			text := strings.ReplaceAll(f.text, "\n", "")
-			if f.textual && strings.Contains(text, "SiiNunit") {
+			if f.textual { //&& strings.Contains(text, "SiiNunit") {
 				if r.MatchString(text) {
 					arr0 := r.FindAllStringSubmatch(text, -1)
 					for _, arr1 := range arr0 {
 						if icon {
-							set["material/ui/accessory/"+arr1[group]+".tga"] = true
-							set["material/ui/accessory/"+arr1[group]+".mat"] = true
-							set["material/ui/accessory/"+arr1[group]+".tobj"] = true
+							set.Add("material/ui/accessory/" + arr1[group] + ".tga")
+							set.Add("material/ui/accessory/" + arr1[group] + ".mat")
+							set.Add("material/ui/accessory/" + arr1[group] + ".tobj")
 						} else {
-							set[arr1[group]] = true
+							path := arr1[group]
+							dir, name, extension := Unjoin(path)
+							// model files
+							if len(extension) == 4 && strings.HasPrefix(extension, ".pm") {
+								set.Add(Join(dir, name, extension))
+								set.Add(Join(dir, name, ".pmd"))
+								set.Add(Join(dir, name, ".pmc"))
+								set.Add(Join(dir, name, ".pmg"))
+								set.Add(Join(dir, name, ".pma"))
+							}
+							// intermediate files
+							if len(extension) == 4 && strings.HasPrefix(extension, ".pi") {
+								set.Add(Join(dir, name, extension))
+								set.Add(Join(dir, name, ".pit"))
+								set.Add(Join(dir, name, ".pim"))
+								set.Add(Join(dir, name, ".pic"))
+								set.Add(Join(dir, name, ".pia"))
+								set.Add(Join(dir, name, ".pip"))
+							}
+							// texture/material files
+							if strings.HasPrefix(extension, ".tobj") ||
+								strings.HasPrefix(extension, ".mat") {
+								set.Add(Join(dir, name, extension))
+								set.Add(Join(dir, name, ".mat"))
+								set.Add(Join(dir, name, ".tobj"))
+								set.Add(Join(dir, name, ".dds"))
+								set.Add(Join(dir, name, ".tga"))
+								set.Add(Join(dir, name, ".png"))
+							}
+
 						}
 
 					}
@@ -321,14 +251,10 @@ func (this *SCS) match(r *regexp.Regexp, group int, icon bool) []string {
 		}
 	}
 
-	keys := []string{}
-	for k := range set {
-		keys = append(keys, k)
-	}
-	return keys
+	return set.ToSlice()
 }
 
-var extracted = map[uint64]bool{}
+var extracted = mapset.NewSet[uint64]()
 
 func (this *SCS) TryExtract(base string) {
 	// well-known roots
@@ -342,7 +268,7 @@ func (this *SCS) TryExtract(base string) {
 	r = regexp.MustCompile("icon: \"([^\"]+)\"")
 	paths = append(paths, this.match(r, 1, true)...)
 
-	extracted = map[uint64]bool{}
+	extracted.Clear()
 
 	for _, path := range paths {
 		tree := this.ReadTree(path)
@@ -352,7 +278,7 @@ func (this *SCS) TryExtract(base string) {
 		}
 	}
 
-	fmt.Printf("%d mounted, %d extracted", this.header.entriesCount, len(extracted))
+	fmt.Printf("\n[hashfs] %d mounted, %d extracted\n", this.header.entriesCount, len(extracted.ToSlice()))
 }
 
 func (this *SCS) init() {
@@ -396,9 +322,9 @@ func (this HashfsFile) Hash() uint64 {
 
 func (this HashfsFile) Save(base string) {
 
-	if _, ok := extracted[this.hash]; !ok {
+	if !extracted.Contains(this.hash) {
 		fmt.Printf("📜 %s \n", this.path)
-		extracted[this.hash] = true
+		extracted.Add(this.hash)
 	}
 
 	path := base + "/" + this.path
@@ -411,9 +337,9 @@ func (this HashfsDir) Hash() uint64 {
 }
 
 func (this HashfsDir) Save(base string) {
-	if _, ok := extracted[this.hash]; !ok {
+	if !extracted.Contains(this.hash) {
 		fmt.Printf("📁 %s \n", this.path)
-		extracted[this.hash] = true
+		extracted.Add(this.hash)
 	}
 
 	os.MkdirAll(base+"/"+this.path, os.ModeDir)

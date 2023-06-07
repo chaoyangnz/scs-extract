@@ -35,11 +35,17 @@ func main() {
 		scsFile := args.Get(0)
 		destPath := args.Get(1)
 
+		_, fileName, _ := Unjoin(scsFile)
+
 		scs := NewSCS(scsFile)
 		if dump {
-			scs.Dump(filepath.Join(destPath, "dump"))
+			scs.Dump(filepath.Join(destPath, fileName+"_dump"))
 		}
-		scs.TryExtract(filepath.Join(destPath, "extracted"))
+
+		scs.TryExtract(filepath.Join(destPath, fileName))
+
+		//_, ok := scs.GetEntryByPath("vehicle/truck/tmp_acc/gps_tmp.pmd")
+		//fmt.Println(ok)
 
 		return nil
 	}
