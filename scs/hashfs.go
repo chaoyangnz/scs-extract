@@ -196,57 +196,19 @@ func (this *SCS) Dump(base string) {
 
 }
 
-// match text in SII files
-func (this *SCS) match(r *regexp.Regexp, group int, icon bool) []string {
+func (this *SCS) searchPaths(r *regexp.Regexp, handler func(groups []string, set mapset.Set[string])) []string {
 	set := mapset.NewSet[string]()
-
 	for _, entry := range this.entries {
-		if !entry.flags.dir {
-			f := this.readFile(entry)
-			text := strings.ReplaceAll(f.text, "\n", "")
-			if f.textual { //&& strings.Contains(text, "SiiNunit") {
-				if r.MatchString(text) {
-					arr0 := r.FindAllStringSubmatch(text, -1)
-					for _, arr1 := range arr0 {
-						if icon {
-							set.Add("material/ui/accessory/" + arr1[group] + ".tga")
-							set.Add("material/ui/accessory/" + arr1[group] + ".mat")
-							set.Add("material/ui/accessory/" + arr1[group] + ".tobj")
-						} else {
-							path := arr1[group]
-							dir, name, extension := Unjoin(path)
-							// model files
-							if len(extension) == 4 && strings.HasPrefix(extension, ".pm") {
-								set.Add(Join(dir, name, extension))
-								set.Add(Join(dir, name, ".pmd"))
-								set.Add(Join(dir, name, ".pmc"))
-								set.Add(Join(dir, name, ".pmg"))
-								set.Add(Join(dir, name, ".pma"))
-							}
-							// intermediate files
-							if len(extension) == 4 && strings.HasPrefix(extension, ".pi") {
-								set.Add(Join(dir, name, extension))
-								set.Add(Join(dir, name, ".pit"))
-								set.Add(Join(dir, name, ".pim"))
-								set.Add(Join(dir, name, ".pic"))
-								set.Add(Join(dir, name, ".pia"))
-								set.Add(Join(dir, name, ".pip"))
-							}
-							// texture/material files
-							if strings.HasPrefix(extension, ".tobj") ||
-								strings.HasPrefix(extension, ".mat") {
-								set.Add(Join(dir, name, extension))
-								set.Add(Join(dir, name, ".mat"))
-								set.Add(Join(dir, name, ".tobj"))
-								set.Add(Join(dir, name, ".dds"))
-								set.Add(Join(dir, name, ".tga"))
-								set.Add(Join(dir, name, ".png"))
-							}
+		if entry.flags.dir {
+			continue
+		}
 
-						}
+		f := this.readFile(entry)
 
-					}
-				}
+		if r.Match(f.data) {
+			matches := r.FindAllSubmatch(f.data, -1)
+			for _, groups := range toStrings(matches) {
+				handler(groups, set)
 			}
 		}
 	}
@@ -256,17 +218,50 @@ func (this *SCS) match(r *regexp.Regexp, group int, icon bool) []string {
 
 var extracted = mapset.NewSet[uint64]()
 
-func (this *SCS) TryExtract(base string) {
+func (this *SCS) TryExtract(base string, additionalPaths ...string) {
 	// well-known roots
 	paths := wellKnownPaths
 
-	// pmg, pmd...
-	r := regexp.MustCompile("\"/([^\"]+)\"")
-	paths = append(paths, this.match(r, 1, false)...)
+	// any path in binary or textual files
+	r := regexp.MustCompile(`/([\x20-\x21\x23-\x7E]+(\.(pmd|pmg|pmc|pma|ppd|tobj|mat|soundref|sii|sui|dds|tga|png)))`)
+	paths = append(paths, this.searchPaths(r, func(groups []string, set mapset.Set[string]) {
+		path := groups[1]
+		set.Add(path)
+	})...)
 
-	// icons in material/
-	r = regexp.MustCompile("icon: \"([^\"]+)\"")
-	paths = append(paths, this.match(r, 1, true)...)
+	// icons in some sii files which is a relative path without extension pointing to material/
+	// example: icon: "hudgps_icon"
+	r = regexp.MustCompile(`icon\s?:\s?"([\x20-\x21\x23-\x7E]+(\.(tobj|mat|dds|tga|png))?)"`)
+	paths = append(paths, this.searchPaths(r, func(groups []string, set mapset.Set[string]) {
+		path := groups[1]
+		if strings.HasPrefix(path, "/") {
+			set.Add(path)
+			return
+		}
+
+		extension := ""
+		if len(groups) >= 3 {
+			extension = groups[2]
+		}
+		set.Add("material/ui/accessory/" + path + defaults(extension, ".mat"))
+		set.Add("material/ui/accessory/" + path + defaults(extension, ".tobj"))
+		set.Add("material/ui/accessory/" + path + defaults(extension, ".dds"))
+		set.Add("material/ui/accessory/" + path + defaults(extension, ".png"))
+	})...)
+
+	// texture in .mat file which points to material/ which are not a full qualified path
+	// example: texture : "hudgps_icon.tobj"
+	r = regexp.MustCompile(`texture\s?:\s?"([\x20-\x21\x23-\x7E]+\.tobj)"`)
+	paths = append(paths, this.searchPaths(r, func(groups []string, set mapset.Set[string]) {
+		path := groups[1]
+		if strings.HasPrefix(path, "/") {
+			set.Add(path)
+			return
+		}
+		set.Add("material/ui/accessory/" + path)
+	})...)
+
+	paths = append(paths, additionalPaths...)
 
 	extracted.Clear()
 

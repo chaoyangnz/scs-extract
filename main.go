@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	. "github.com/chaoyangnz/scs-extract/scs"
 	"github.com/urfave/cli"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 func main() {
 	dump := false
+	additionalHashfsPaths := make(cli.StringSlice, 0)
 
 	app := cli.NewApp()
 	app.Name = "scs-extract"
@@ -25,10 +27,16 @@ func main() {
 			Usage:       "dump raw hashfs files",
 			Destination: &dump,
 		},
+		cli.StringSliceFlag{
+			Name:  "additional-hashfs-paths, p",
+			Usage: "additional hashfs paths if auto-discovery doesn't find",
+			Value: &additionalHashfsPaths,
+		},
 	}
 	app.Action = func(c *cli.Context) error {
 		args := c.Args()
-		if c.NArg() < 1 {
+		if c.NArg() < 2 {
+			cli.ShowAppHelp(c)
 			return nil
 		}
 
@@ -38,14 +46,20 @@ func main() {
 		_, fileName, _ := Unjoin(scsFile)
 
 		scs := NewSCS(scsFile)
+
+		if _, ok := scs.GetEntryByPath(""); ok {
+			fmt.Println("root found, please use official scs-extractor instead")
+			return nil
+		}
+
 		if dump {
 			scs.Dump(filepath.Join(destPath, fileName+"_dump"))
 		}
 
-		scs.TryExtract(filepath.Join(destPath, fileName))
+		additionalPaths := NormalizePaths(additionalHashfsPaths)
+		fmt.Printf("Additional hashfs paths: %+v\n", additionalPaths)
 
-		//_, ok := scs.GetEntryByPath("vehicle/truck/tmp_acc/gps_tmp.pmd")
-		//fmt.Println(ok)
+		scs.TryExtract(filepath.Join(destPath, fileName), additionalPaths...)
 
 		return nil
 	}

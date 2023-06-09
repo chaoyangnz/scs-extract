@@ -1,11 +1,11 @@
 var fs = require("fs"),
     path = require("path")
 
-const paths = []
+const paths = ['']
 
 const folder = "D:/ets2/base/"
 
-const whitelist = ['def', 'ui', 'material', 'vehicle']
+const whitelist = ['def', 'ui', 'material', 'vehicle', 'automat']
 
 function walk(dir, callback) {
     const files = fs.readdirSync(dir)
