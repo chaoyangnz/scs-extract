@@ -59,7 +59,7 @@ func main() {
 		additionalPaths := NormalizePaths(additionalHashfsPaths)
 		fmt.Printf("Additional hashfs paths: %+v\n", additionalPaths)
 
-		scs.TryExtract(filepath.Join(destPath, fileName), additionalPaths...)
+		scs.TryExtract(filepath.Join(destPath, fileName+"_extracted"), additionalPaths...)
 
 		return nil
 	}

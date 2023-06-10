@@ -94,7 +94,7 @@ func NewSCS(path string) *SCS {
 	return scs
 }
 
-func (this *SCS) ReadTree(path string) HashfsNode {
+func (this *SCS) readTree(path string) HashfsNode {
 	if entry, ok := this.GetEntryByPath(path); ok {
 		if entry.flags.dir {
 			dir := this.readDir(entry)
@@ -103,7 +103,7 @@ func (this *SCS) ReadTree(path string) HashfsNode {
 			for i, name := range dir.data {
 				if strings.HasPrefix(name, "*") {
 					p := path + "/" + name[1:]
-					child := this.ReadTree(p).(HashfsDir)
+					child := this.readTree(p).(HashfsDir)
 					child.name = name[1:]
 					child.path = p
 					dir.children[i] = child
@@ -266,7 +266,7 @@ func (this *SCS) TryExtract(base string, additionalPaths ...string) {
 	extracted.Clear()
 
 	for _, path := range paths {
-		tree := this.ReadTree(path)
+		tree := this.readTree(path)
 
 		if tree != nil {
 			tree.Save(base)
