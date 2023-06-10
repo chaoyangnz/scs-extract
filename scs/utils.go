@@ -77,7 +77,7 @@ func (this *Buffer) nextLine() (string, bool) {
 	return string(this.readable), false
 }
 
-func (this *Buffer) deflate() *Buffer {
+func (this *Buffer) inflate() *Buffer {
 	z, err := zlib.NewReader(bytes.NewReader(this.bytes))
 	if err != nil {
 		return &Buffer{}
