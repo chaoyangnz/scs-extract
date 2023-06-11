@@ -14,7 +14,7 @@ This utility will try the best to extract the rootless hashfs files.
 `scs-extract [options] <scs_file> [dest_folder]`
 
 ```console
-# scs-extract ets2/accessory_pack.scs .
+# scs-extract ets2/accessory.scs .
 ```
 
 ```
