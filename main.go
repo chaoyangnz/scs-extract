@@ -43,28 +43,45 @@ func main() {
 		scsFile := args.Get(0)
 		destPath := args.Get(1)
 
-		_, fileName, _ := Unjoin(scsFile)
+		//oldImpl(scsFile, destPath, dump, additionalHashfsPaths)
 
-		scs := NewSCS(scsFile)
-
-		if _, ok := scs.GetEntryByPath(""); ok {
-			fmt.Println("root found, please use official scs-extractor instead")
-			return nil
-		}
-
-		if dump {
-			scs.Dump(filepath.Join(destPath, fileName+"_dump"))
-		}
-
-		additionalPaths := NormalizePaths(additionalHashfsPaths)
-		fmt.Printf("Additional hashfs paths: %+v\n", additionalPaths)
-
-		scs.TryExtract(filepath.Join(destPath, fileName+"_extracted"), additionalPaths...)
-
-		//f := scs.FindFile("vehicle/truck/tmp_acc/gps_tmp.tobj")
-		//fmt.Printf("%+v \n", f)
+		newImpl(scsFile, destPath)
 
 		return nil
 	}
 	app.Run(os.Args)
+}
+
+func newImpl(scsFile string, destPath string) {
+	scs := NewHashfs(scsFile)
+	scs.Extract(destPath)
+
+	//if entry, ok := scs.NodeByPath("vehicle/truck/tmp_acc/gps_tmp_uk.pmd"); ok {
+	//	fmt.Printf("%+v \n", entry)
+	//}
+}
+
+func oldImpl(scsFile string, destPath string, dump bool, additionalHashfsPaths []string) {
+	_, fileName, _ := Unjoin(scsFile)
+
+	scs := NewSCS(scsFile)
+
+	if _, ok := scs.EntryByPath(""); ok {
+		fmt.Println("root found, please use official scs-extractor instead")
+		return
+	}
+
+	if dump {
+		scs.Dump(filepath.Join(destPath, fileName+"_dump"))
+	}
+
+	additionalPaths := NormalizePaths(additionalHashfsPaths)
+	fmt.Printf("Additional hashfs paths: %+v\n", additionalPaths)
+
+	scs.TryExtract(filepath.Join(destPath, fileName+"_extracted"), additionalPaths...)
+
+	//
+	if entry, ok := scs.EntryByPath("vehicle/truck/tmp_acc/gps_tmp_uk.pmd"); ok {
+		fmt.Printf("%+v \n", entry)
+	}
 }
