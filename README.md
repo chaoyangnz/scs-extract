@@ -52,7 +52,7 @@ which can help the utility to extract the missing files.
 Here is an example
 
 ```
-converter_pix.exe -m /vehicle/truck/xxx/yyy -b d:/ets2/mode/base
+converter_pix.exe -m /vehicle/upgrade/xx_yyy -b d:/ets2/mode/base
 
  ******************************************
  **        Converter PMX to PIX          **
