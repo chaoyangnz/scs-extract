@@ -7,10 +7,12 @@ import (
 	"github.com/chaoyangnz/scs-extract/structs"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/kaitai-io/kaitai_struct_go_runtime/kaitai"
-	"io/ioutil"
+	"github.com/samber/lo"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -60,7 +62,7 @@ func NewHashfs(scsFile string) *Hashfs {
 			if isCompressed {
 				content, _ := entry.File()
 				reader, _ := zlib.NewReader(bytes.NewReader(content))
-				b, _ := ioutil.ReadAll(reader)
+				b, _ := io.ReadAll(reader)
 				node.file = b
 			}
 		}
@@ -79,30 +81,29 @@ func (this *Hashfs) traverse(path string) {
 		this.extracted.Add(path)
 
 		if node.isDir {
-			for _, name := range node.dir {
+			lo.ForEach(node.dir, func(name string, index int) {
 				this.traverse(node.path + "/" + name)
-			}
+			})
 		}
 	}
 }
 
 func (this *Hashfs) match(r *regexp.Regexp, handler func(m []string) []string, paths mapset.Set[string]) {
 	for _, node := range this.nodes {
-		if node.isDir {
+		if node.isDir || !r.Match(node.file) {
 			continue
 		}
 
-		if r.Match(node.file) {
-			matches := r.FindAllSubmatch(node.file, -1)
-			for _, match := range toStrings(matches) {
-				paths.Append(handler(match)...)
-			}
+		matches := r.FindAllSubmatch(node.file, -1)
+		for _, match := range toStrings(matches) {
+			paths.Append(handler(match)...)
 		}
+
 	}
 }
 
 func (this *Hashfs) NodeByPath(path string) (Node, bool) {
-	hash := hashed(path)
+	hash := cityhash(path)
 	if node, ok := this.nodesMap[hash]; ok {
 		return node, true
 	}
@@ -128,9 +129,29 @@ func (this *Hashfs) seed() mapset.Set[string] {
 		return []string{"material/ui/accessory/" + match[1]}
 	}, paths)
 
+	lo.ForEach(paths.ToSlice(), func(path string, _ int) {
+		backtrackPaths(path, paths)
+	})
+
 	paths.Append(wellKnownPaths...)
 
 	return paths
+}
+
+func (this *Hashfs) Dump(dest string) {
+	os.MkdirAll(dest, os.ModeDir)
+
+	for _, node := range this.nodes {
+		if node.isDir {
+			contents := []byte(strings.Join(node.dir, "\n"))
+			os.WriteFile(filepath.Join(dest, "folder_"+strconv.FormatUint(node.hash, 10)), contents, 0644)
+		} else {
+			contents := node.file
+			r := regexp.MustCompile("SiiNunit")
+			suffix := lo.Ternary(r.Match(contents), ".sii", "")
+			os.WriteFile(filepath.Join(dest, strconv.FormatUint(node.hash, 10)+suffix), contents, 0644)
+		}
+	}
 }
 
 func (this *Hashfs) Extract(dest string, additionalPaths ...string) {
@@ -151,12 +172,9 @@ func (this *Hashfs) Extract(dest string, additionalPaths ...string) {
 			os.WriteFile(filepath.Join(dest, path), node.file, 0644)
 		}
 
-		icon := "📜"
-		if node.isDir {
-			icon = "📁"
-		}
+		icon := lo.Ternary(node.isDir, "📁", "📜")
 		fmt.Printf("%s %s \n", icon, path)
 	}
 
-	fmt.Printf("%d mounted, %d extracted \n", len(this.nodes), len(this.extracted.ToSlice()))
+	fmt.Printf("\n%d mounted, %d extracted \n", len(this.nodes), len(this.extracted.ToSlice()))
 }

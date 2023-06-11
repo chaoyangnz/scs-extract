@@ -130,7 +130,7 @@ func (this *SCS) readTree(path string) HashfsNode {
 }
 
 func (this *SCS) EntryByPath(path string) (HashfsEntry, bool) {
-	entry, ok := this.entryMap[hashed(path)]
+	entry, ok := this.entryMap[cityhash(path)]
 
 	return entry, ok
 }

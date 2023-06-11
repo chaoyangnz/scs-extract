@@ -53,10 +53,15 @@ func main() {
 }
 
 func newImpl(scsFile string, destPath string, dump bool, additionalHashfsPaths []string) {
-	additionalPaths := NormalizePaths(additionalHashfsPaths)
+	_, fileName, _ := Unjoin(scsFile)
+	additionalPaths := NormalizePaths(additionalHashfsPaths...)
 
 	scs := NewHashfs(scsFile)
-	scs.Extract(destPath, additionalPaths...)
+	scs.Extract(filepath.Join(destPath, fileName+"_extracted"), additionalPaths...)
+
+	if dump {
+		scs.Dump(filepath.Join(destPath, fileName+"_dump"))
+	}
 
 	//if entry, ok := scs.NodeByPath("vehicle/truck/tmp_acc/gps_tmp_uk.pmd"); ok {
 	//	fmt.Printf("%+v \n", entry)
@@ -77,7 +82,7 @@ func oldImpl(scsFile string, destPath string, dump bool, additionalHashfsPaths [
 		scs.Dump(filepath.Join(destPath, fileName+"_dump"))
 	}
 
-	additionalPaths := NormalizePaths(additionalHashfsPaths)
+	additionalPaths := NormalizePaths(additionalHashfsPaths...)
 	fmt.Printf("Additional hashfs paths: %+v\n", additionalPaths)
 
 	scs.TryExtract(filepath.Join(destPath, fileName+"_extracted"), additionalPaths...)
