@@ -49,7 +49,13 @@ func NewHashfs(scsFile string) *Hashfs {
 		}
 		if isDir {
 			content, _ := entry.Dir()
-			node.dir = strings.Split(content, "\n")
+			names := strings.Split(content, "\n")
+			for i, name := range names {
+				if strings.HasPrefix(name, "*") {
+					names[i] = name[1:]
+				}
+			}
+			node.dir = names
 		} else {
 			if isCompressed {
 				content, _ := entry.File()
@@ -74,16 +80,13 @@ func (this *Hashfs) traverse(path string) {
 
 		if node.isDir {
 			for _, name := range node.dir {
-				if strings.HasPrefix(name, "*") {
-					name = name[1:]
-				}
 				this.traverse(node.path + "/" + name)
 			}
 		}
 	}
 }
 
-func (this *Hashfs) Match(r *regexp.Regexp, handler func(match []string) []string, paths mapset.Set[string]) {
+func (this *Hashfs) match(r *regexp.Regexp, handler func(m []string) []string, paths mapset.Set[string]) {
 	for _, node := range this.nodes {
 		if node.isDir {
 			continue
@@ -106,46 +109,36 @@ func (this *Hashfs) NodeByPath(path string) (Node, bool) {
 	return Node{}, false
 }
 
-func (this *Hashfs) seed() []string {
+func (this *Hashfs) seed() mapset.Set[string] {
 	// match
 	var paths = mapset.NewSet[string]()
 
 	r := regexp.MustCompile(`/([\x20-\x7E]+(\.(pmd|pmg|pmc|pma|ppd|tobj|mat|soundref|sii|sui|dds|tga|png)))`)
-	this.Match(r, func(match []string) []string {
+	this.match(r, func(match []string) []string {
 		return []string{match[1]}
 	}, paths)
 
 	r = regexp.MustCompile(`icon\s?:\s?"([\x20-\x21\x23-\x7E]+(\.(tobj|mat|dds|tga|png))?)"`)
-	this.Match(r, func(match []string) []string {
+	this.match(r, func(match []string) []string {
 		return []string{"material/ui/accessory/" + match[1] + defaults(match[2], ".mat")}
 	}, paths)
 
 	r = regexp.MustCompile(`texture\s?:\s?"([\x20-\x21\x23-\x7E]+\.tobj)"`)
-	this.Match(r, func(match []string) []string {
+	this.match(r, func(match []string) []string {
 		return []string{"material/ui/accessory/" + match[1]}
 	}, paths)
 
 	paths.Append(wellKnownPaths...)
 
-	//fmt.Printf("%+v \n", paths.ToSlice())
-
-	// seeds - all existing
-	//var seeds []string
-	//for _, path := range paths.ToSlice() {
-	//	if node, ok := this.NodeByPath(path); ok {
-	//		node.path = path
-	//		seeds = append(seeds, path)
-	//	}
-	//}
-
-	return paths.ToSlice()
+	return paths
 }
 
-func (this *Hashfs) Extract(dest string) {
+func (this *Hashfs) Extract(dest string, additionalPaths ...string) {
 
 	seeds := this.seed()
+	seeds.Append(additionalPaths...)
 
-	for _, path := range seeds {
+	for _, path := range seeds.ToSlice() {
 		this.traverse(path)
 	}
 

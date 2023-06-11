@@ -45,16 +45,18 @@ func main() {
 
 		//oldImpl(scsFile, destPath, dump, additionalHashfsPaths)
 
-		newImpl(scsFile, destPath)
+		newImpl(scsFile, destPath, dump, additionalHashfsPaths)
 
 		return nil
 	}
 	app.Run(os.Args)
 }
 
-func newImpl(scsFile string, destPath string) {
+func newImpl(scsFile string, destPath string, dump bool, additionalHashfsPaths []string) {
+	additionalPaths := NormalizePaths(additionalHashfsPaths)
+
 	scs := NewHashfs(scsFile)
-	scs.Extract(destPath)
+	scs.Extract(destPath, additionalPaths...)
 
 	//if entry, ok := scs.NodeByPath("vehicle/truck/tmp_acc/gps_tmp_uk.pmd"); ok {
 	//	fmt.Printf("%+v \n", entry)
