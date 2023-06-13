@@ -49,9 +49,16 @@ func NewHashfs(scsFile string) *Hashfs {
 			hash:  entry.Hash,
 			isDir: isDir,
 		}
+
+		content, _ := entry.Data()
+		if isCompressed {
+			reader, _ := zlib.NewReader(bytes.NewReader(content))
+			b, _ := io.ReadAll(reader)
+			content = b
+		}
+
 		if isDir {
-			content, _ := entry.Dir()
-			names := strings.Split(content, "\n")
+			names := strings.Split(string(content), "\n")
 			for i, name := range names {
 				if strings.HasPrefix(name, "*") {
 					names[i] = name[1:]
@@ -59,12 +66,7 @@ func NewHashfs(scsFile string) *Hashfs {
 			}
 			node.dir = names
 		} else {
-			if isCompressed {
-				content, _ := entry.File()
-				reader, _ := zlib.NewReader(bytes.NewReader(content))
-				b, _ := io.ReadAll(reader)
-				node.file = b
-			}
+			node.file = content
 		}
 		nodes[i] = node
 		nodesMap[entry.Hash] = node

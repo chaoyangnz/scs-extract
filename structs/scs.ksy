@@ -48,21 +48,8 @@ types:
       is_encrypted:
         value: (flags & (1 << 3)) != 0
       len:
-        value: > 
-          is_compressed ? compressed_size : size
-      dir:
+        value: 'is_compressed ? compressed_size : size'
+      data:
         io: _root._io
         pos: offset
         size: len
-        type: str
-        encoding: ASCII
-        if: is_dir
-      file:
-        io: _root._io
-        pos: offset
-        size: len
-        if: not is_dir
-        
-          
-        
-  
